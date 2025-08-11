@@ -62,7 +62,7 @@ Antibiotic resistance is a growing global health threat. Beta-lactamase TEM enzy
 
 Run the script to train the model (if not cached) and start the Flask server:
 
-    python3 airep.py
+    python3 main.py
 
 - The model trains automatically on Beta-lactamase TEM data.
 - Once running, open your browser at `http://localhost:5000`.
