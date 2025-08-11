@@ -180,4 +180,6 @@ cython_debug/
 .cursorignore
 .cursorindexingignore
 BindingDB_All.tsv
-beta_lactamase_tem_data.pkl
+*.pkl
+*.npz
+*.joblib

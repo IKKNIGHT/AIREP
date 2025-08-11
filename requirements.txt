@@ -1,2 +1,9 @@
 pandas
 Bio
+numpy
+scikit-learn
+rdkit
+argparse
+joblib
+matplotlib
+flask

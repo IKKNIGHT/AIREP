@@ -1,75 +1,170 @@
-# Beta-lactamase TEM Ligand Binding Prediction
+# AIREP: AI-Driven Inhibitor Recommendation for Beta-lactamase TEM
+
+![Logo](plots/feature_importance.png)
+
+---
 
 ## Project Overview
 
-This project aims to develop a computational model that predicts the binding affinity of small molecule ligands to the bacterial enzyme **Beta-lactamase TEM**. Beta-lactamase enzymes are a major cause of antibiotic resistance by breaking down beta-lactam antibiotics, making infections harder to treat. Accurate prediction of ligand binding can accelerate drug discovery and help design new inhibitors to combat resistant bacteria.
+AIREP (AI-driven RECommendation of inhibitors) is a machine learning project aimed at predicting potential small molecule inhibitors for the enzyme **Beta-lactamase TEM**, a key contributor to antibiotic resistance. The model leverages BindingDB experimental data and molecular fingerprints to learn structure-activity relationships and recommend promising candidates from chemical libraries.
 
 ---
 
-## Why This Project Matters
+## Motivation
 
-- **Antibiotic resistance is a critical global health threat.** Beta-lactamases like TEM contribute heavily to resistance against penicillins and cephalosporins.
-- Developing new inhibitors targeting Beta-lactamase TEM can restore the effectiveness of existing antibiotics.
-- Computational predictions drastically reduce time and cost compared to experimental assays.
-- This project leverages open-access biochemical binding data to build an AI-powered prediction tool, demonstrating the impact of computer science on real-world biomedical challenges.
+Antibiotic resistance is a growing global health threat. Beta-lactamase TEM enzymes degrade β-lactam antibiotics, rendering many treatments ineffective. Identifying potent inhibitors to block this enzyme is critical. Experimental screening is costly and slow; AI-driven prediction accelerates discovery by narrowing candidates for lab testing.
 
 ---
 
-## Data Sources
+## Project Components
 
-- **BindingDB Dataset:** Contains ligand structures (SMILES) and binding affinity measurements (Kd, IC50, Ki) for Beta-lactamase TEM.  
-- **FASTA Protein Sequences:** Amino acid sequences of Beta-lactamase TEM extracted from BindingDB resources.  
-- *(Optional future additions)* Protein 3D structures (PDB), resistance gene variant sequences (CARD database).
+- **Data Processing**:  
+  Cleans and filters BindingDB data specific to Beta-lactamase TEM, extracting molecular structures (SMILES) and experimental affinities (Kd, IC50, Ki).
 
----
+- **Feature Engineering**:  
+  Converts SMILES to RDKit Morgan fingerprints (2048 bits, radius 2) as input features.
 
-## How It Works
+- **Modeling**:  
+  Trains a Random Forest regressor using hyperparameter tuning (RandomizedSearchCV). Predicts binding affinity as pAffinity = -log10(affinity in M).
 
-1. **Data Loading and Filtering:**  
-   The BindingDB dataset (~500 MB TSV file) is loaded in chunks and filtered for entries related to Beta-lactamase TEM to reduce size and focus on relevant data.
+- **Evaluation**:  
+  Model performance assessed with RMSE and R² on validation and test splits.
 
-2. **Data Caching:**  
-   Filtered ligand and binding data are cached locally to speed up subsequent runs and ease development.
+- **Recommendation Engine**:  
+  Scores candidate molecules using the trained model and ranks them by predicted affinity.
 
-3. **Sequence Search:**  
-   Protein sequences relevant to Beta-lactamase TEM are extracted from FASTA files for potential feature extraction.
+- **Sequence Filtering**:  
+  Filters target-like sequences from provided FASTA files based on keywords and length.
 
-4. **Feature Extraction and Model Building:**  
-   Ligand molecular features are generated from SMILES strings using cheminformatics tools (e.g., RDKit). Protein features may be integrated as the project evolves.
-
-5. **Machine Learning:**  
-   A regression or classification model is trained to predict ligand binding affinity, using curated BindingDB data as ground truth.
+- **Web App**:  
+  Flask interface to upload candidate molecules and obtain top inhibitor predictions.
 
 ---
 
-## Getting Started
+## Installation
 
-### Requirements
+1. Clone the repository:
+    git clone https://github.com/yourusername/airep.git
+    cd airep
 
-- Python 3.8+  
-- Pandas  
-- Biopython  
-- RDKit (for chemical feature extraction)  
-- Scikit-learn or PyTorch/TensorFlow (for modeling)
+2. Install dependencies:
+    pip install -r requirements.txt
 
-### Usage
+3. Ensure you have the following files in the project root:
+   - `BindingDB_All.tsv` (BindingDB dataset)
+   - `BindingDBTargetSequences.fasta` (target protein sequences)
 
-1. Download and unzip the **BindingDB_All_202508.tsv** and **BindingDBTargetSequences.fasta** files from [BindingDB](https://www.bindingdb.org/).  
-2. Run the provided script to load, filter, and cache Beta-lactamase TEM ligand binding data.  
-3. Extend with feature engineering and model training as needed.
+---
+
+## Usage
+
+### Training and Running the Web App
+
+Run the script to train the model (if not cached) and start the Flask server:
+
+    python3 airep.py
+
+- The model trains automatically on Beta-lactamase TEM data.
+- Once running, open your browser at `http://localhost:5000`.
+- Upload candidate SMILES and optionally a FASTA file (not required for Beta-lactamase TEM as local FASTA is used).
+- Select top K recommendations and submit.
+
+---
+
+## Results and Visualizations
+
+### Model Performance
+
+- Validation RMSE: ~0.795  
+- Test RMSE: ~0.901  
+- Test R²: ~0.741
+
+These metrics indicate the model predicts binding affinities with reasonable accuracy suitable for guiding experimental screening.
+
+### Example Predictions
+
+| SMILES                                                 | pAffinity | Predicted nM |
+|--------------------------------------------------------|-----------|--------------|
+| `[O-]C(=O)C1=CS[C@H]2N1C(=O)\C2=C/c1cn2CCOCc2n1`      | 9.052     | 0.9          |
+| `[O-]C(=O)C1=CS[C@H]2N1C(=O)\C2=C\c1cnc2COCCn12`      | 9.025     | 0.9          |
+| `ICC1CC(C(=O)O1)=C1O[C@@H]2CC(=O)N2C1C(=O)OCc1ccccc1`  | 9.009     | 1.0          |
+
+### Generated Plots
+
+**Validation: Predicted vs Actual**
+
+![Validation Pred vs Actual](plots/pred_vs_actual_val.png)
+
+---
+
+**Test: Predicted vs Actual**
+
+![Test Pred vs Actual](plots/pred_vs_actual_test.png)
+
+---
+
+**Test Residuals**
+
+![Test Residuals](plots/residuals_test.png)
+
+---
+
+**Top 20 Feature Importances**
+
+![Feature Importances](plots/feature_importance.png)
+
+---
+
+## Project Structure
+```
+airep/
+│
+├── airep.py # Main script (training + Flask app)
+├── BindingDB_All.tsv # BindingDB dataset (large TSV)
+├── BindingDBTargetSequences.fasta # Target protein sequences
+├── cache_.pkl # Cached filtered data by target
+├── features_.npz # Cached fingerprint features
+├── model_beta-lactamase_tem.joblib # Saved trained model
+├── plots/ # Generated evaluation plots
+│ ├── pred_vs_actual_val.png
+│ ├── pred_vs_actual_test.png
+│ ├── residuals_test.png
+│ └── feature_importance.png
+├── requirements.txt # Python dependencies
+└── README.md # This file
+```
+
 
 ---
 
 ## Future Work
 
-- Integrate 3D structural data for docking-based features.  
-- Explore mutation impacts by including variant sequences from resistance databases.  
-- Develop a web app for interactive prediction and visualization.  
-- Collaborate with experimentalists to validate model predictions.
+- Expand model to other targets with minimal changes.
+- Incorporate deep learning models (e.g., Graph Neural Networks) for improved affinity prediction.
+- Integrate with experimental workflows for lab validation of predictions.
+- Develop a more interactive web UI with visualization of molecular structures.
+
+---
+
+## References
+
+- [BindingDB](https://www.bindingdb.org)  
+- RDKit: Open-source cheminformatics software  
+- Scikit-learn: Machine learning in Python
+
+---
+
+## Acknowledgements
+
+Special thanks to the developers of RDKit, Scikit-learn, and the BindingDB team for making data and tools freely available.
 
 ---
 
 ## Contact
 
-Created by IK_Knight / Isaaq K
-For questions or collaboration, please reach out via mohammadIsaaqK@gmail.com.
+For questions or collaboration, please contact:  
+**Isaaq Khanooni** — mohammadIsaaqK@gmail.com
+
+---
+
+*This project was developed for ISEF competition — combining AI, chemistry, and bioinformatics for drug discovery.*  
