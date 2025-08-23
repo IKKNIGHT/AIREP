@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 import os
+from dotenv import load_dotenv
 import time
 import math
 import tempfile
@@ -26,7 +27,8 @@ warnings.filterwarnings("ignore")
 np.random.seed(42)
 
 app = Flask(__name__)
-app.secret_key = 'supersecretkey'  # for flashing messages
+load_dotenv()
+app.secret_key = os.getenv("SECRET_KEY")  # for flashing messages
 
 # Config
 BINDINGDB_TSV = "BindingDB_All.tsv"
@@ -268,7 +270,12 @@ INDEX_HTML = """
   {% else %}
     <p><em>Using local FASTA file: {{ local_fasta_file }}</em></p>
   {% endif %}
-  <label>Upload Candidates SMILES file (optional):<br><input type=file name=candidates></label><br><br>
+ <label>Upload Candidates SMILES file (optional):<br><input type=file name=candidates></label>
+{% if session.candidate_smiles %}
+  <p><em>Using {{ session.candidate_smiles|length }} molecules from previous upload (persisted in session).</em></p>
+{% endif %}
+<br><br>
+
   <label>Top K recommendations:<br><input type=number name=topk value=10 min=1 max=100></label><br><br>
   <button type=submit>Recommend Inhibitors</button>
 </form>
@@ -282,11 +289,25 @@ INDEX_HTML = """
   {% endif %}
 {% endwith %}
 
-{% if recommendations %}
-  <h2>Top {{ recommendations|length }} Inhibitor Recommendations</h2>
+{% if user_recommendations %}
+  <h2>Your Uploaded SMILES Recommendations (Top {{ user_recommendations|length }})</h2>
   <table border=1 cellpadding=5>
     <tr><th>SMILES</th><th>pAffinity</th><th>Predicted nM</th></tr>
-    {% for rec in recommendations %}
+    {% for rec in user_recommendations %}
+      <tr>
+        <td style="font-family: monospace;">{{ rec.smiles }}</td>
+        <td>{{ "%.3f"|format(rec.pAffinity) }}</td>
+        <td>{{ "%.1f"|format(rec.predicted_nM) }}</td>
+      </tr>
+    {% endfor %}
+  </table>
+{% endif %}
+
+{% if db_recommendations %}
+  <h2>BindingDB Default Inhibitors (Top {{ db_recommendations|length }})</h2>
+  <table border=1 cellpadding=5>
+    <tr><th>SMILES</th><th>pAffinity</th><th>Predicted nM</th></tr>
+    {% for rec in db_recommendations %}
       <tr>
         <td style="font-family: monospace;">{{ rec.smiles }}</td>
         <td>{{ "%.3f"|format(rec.pAffinity) }}</td>
@@ -297,21 +318,26 @@ INDEX_HTML = """
 {% endif %}
 """
 
+
+
 @app.route('/', methods=['GET'])
 def index():
     return render_template_string(INDEX_HTML, target_name=TARGET_NAME, local_fasta_file=LOCAL_FASTA_FILE)
+
+from flask import session
 
 @app.route('/recommend', methods=['POST'])
 def recommend():
     topk = int(request.form.get('topk', 10))
 
+    # --- Load trained model ---
     model = trained_models.get(TARGET_NAME, None)
     if model is None:
         flash(f"Model for target '{TARGET_NAME}' not loaded.", "error")
         return redirect(url_for('index'))
 
+    # --- Handle FASTA source ---
     if TARGET_NAME == "Beta-lactamase TEM":
-        # Use local fasta file
         fasta_path = LOCAL_FASTA_FILE
         if not os.path.exists(fasta_path):
             flash(f"Local FASTA file '{LOCAL_FASTA_FILE}' not found.", "error")
@@ -325,15 +351,20 @@ def recommend():
             fasta_path = tmpf.name
             fasta_file.save(fasta_path)
 
+    # --- Parse candidate inhibitors (upload or session) ---
+    candidate_smiles = []
     candidates_file = request.files.get('candidates', None)
 
-    candidate_smiles = []
-    if candidates_file:
+    if candidates_file and candidates_file.filename:
         ext = os.path.splitext(candidates_file.filename)[1].lower()
         try:
             if ext in ['.smi', '.txt']:
                 candidates_file.stream.seek(0)
-                candidate_smiles = [line.strip().split()[0] for line in candidates_file.stream if line.strip()]
+                candidate_smiles = [
+                    line.decode('utf-8').strip().split()[0]  # decode bytes to str
+                    for line in candidates_file.stream
+                    if line.strip()
+                ]
             else:
                 candidates_file.stream.seek(0)
                 df_cand = pd.read_csv(candidates_file)
@@ -342,34 +373,65 @@ def recommend():
         except Exception:
             candidate_smiles = []
 
+        # ✅ Save uploaded SMILES in cookie-backed session
+        print(candidate_smiles)
+        session['candidate_smiles'] = candidate_smiles
+    else:
+        # ✅ Reuse previous uploaded SMILES if no new file is provided
+        candidate_smiles = session.get('candidate_smiles', [])
+
+    # --- Sequence search for target validation ---
     keywords = [w.lower() for w in TARGET_NAME.split() if len(w) > 2]
     length_range = (200, 400)
 
     try:
-        candidates = find_target_like_sequences(fasta_path, keywords, length_range=length_range, strict=True)
+        candidates = find_target_like_sequences(
+            fasta_path, keywords, length_range=length_range, strict=True
+        )
         if not candidates:
-            candidates = find_target_like_sequences(fasta_path, keywords, length_range=None, strict=False)
+            candidates = find_target_like_sequences(
+                fasta_path, keywords, length_range=None, strict=False
+            )
         if not candidates:
             flash("No sequences matching target found in FASTA.", "error")
             if TARGET_NAME != "Beta-lactamase TEM":
                 os.remove(fasta_path)
             return redirect(url_for('index'))
 
+        # --- BindingDB inhibitors cache ---
         cache_file = f"cache_{TARGET_NAME.replace(' ', '_').lower()}.pkl"
+        default_smiles = []
         if os.path.exists(cache_file):
             df_cached = pd.read_pickle(cache_file)
             default_smiles = list(pd.unique(df_cached['Ligand SMILES'].dropna()))
-        else:
-            default_smiles = []
 
-        all_smiles = candidate_smiles + default_smiles
-        recommendations = score_candidates(model, all_smiles, top_k=topk)
+        # --- Generate recommendations ---
+        user_recommendations = []
+        db_recommendations = []
 
-        return render_template_string(INDEX_HTML, recommendations=recommendations, target_name=TARGET_NAME, local_fasta_file=LOCAL_FASTA_FILE)
+        if candidate_smiles:
+            user_recommendations = score_candidates(model, candidate_smiles, top_k=topk)
+        if default_smiles:
+            db_recommendations = score_candidates(model, default_smiles, top_k=topk)
+        print(
+            f"[DEBUG] {len(candidate_smiles)} molecules uploaded, {len(user_recommendations)} valid after fingerprinting.")
+
+        return render_template_string(
+            INDEX_HTML,
+            user_recommendations=user_recommendations,
+            db_recommendations=db_recommendations,
+            target_name=TARGET_NAME,
+            local_fasta_file=LOCAL_FASTA_FILE,
+            session=session  # <--- add this
+        )
+
+
     finally:
-        # Remove temp fasta only if not local fasta
         if TARGET_NAME != "Beta-lactamase TEM":
             os.remove(fasta_path)
+
+
+
 
 def train_and_load_model():
     print(f"[+] Loading and filtering data for target: {TARGET_NAME} ...")

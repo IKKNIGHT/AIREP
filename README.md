@@ -53,6 +53,8 @@ Antibiotic resistance is a growing global health threat. Beta-lactamase TEM enzy
 3. Ensure you have the following files in the project root:
    - `BindingDB_All.tsv` (BindingDB dataset)
    - `BindingDBTargetSequences.fasta` (target protein sequences)
+4. Ensure you're .env file has a secret key for flashing messages
+   - for ex. `SECRET_KEY=supersecretkey`
 
 ---
 
@@ -65,7 +67,7 @@ Run the script to train the model (if not cached) and start the Flask server:
     python3 main.py
 
 - The model trains automatically on Beta-lactamase TEM data.
-- Once running, open your browser at `http://localhost:5000`.
+- Once running, open your browser at `http://127.0.0.1:5000`.
 - Upload candidate SMILES and optionally a FASTA file (not required for Beta-lactamase TEM as local FASTA is used).
 - Select top K recommendations and submit.
 

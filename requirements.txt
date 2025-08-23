@@ -7,3 +7,4 @@ argparse
 joblib
 matplotlib
 flask
+python-dotenv

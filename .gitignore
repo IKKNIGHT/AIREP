@@ -183,3 +183,4 @@ BindingDB_All.tsv
 *.pkl
 *.npz
 *.joblib
+.env
