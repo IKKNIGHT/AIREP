@@ -44,7 +44,7 @@ Antibiotic resistance is a growing global health threat. Beta-lactamase TEM enzy
 ## Installation
 
 1. Clone the repository:
-    git clone https://github.com/yourusername/airep.git
+    git clone https://github.com/IKKNIGHT/airep.git
     cd airep
 
 2. Install dependencies:
