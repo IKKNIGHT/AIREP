@@ -215,6 +215,39 @@ def train_model(X, y):
     plt.savefig(os.path.join(PLOTS_DIR, "feature_importance.png"))
     plt.close()
 
+    # Feature Importance Table (top 20)
+    top_importances = importances[indices]
+
+    # Create a 2D list for cellText: [[Index, Importance Value], ...]
+    table_data = []
+    for index, importance in zip(indices, top_importances):
+        # Format importance to a string with 4 decimal places
+        table_data.append([str(index), f"{importance:.4f}"])
+
+    # Define column headers
+    col_labels = ["Feature Index", "Importance Value"]
+
+    # Create the figure and axes, hiding standard plot axes for a clean table look
+    fig, ax = plt.subplots(figsize=(4, 7))  # Adjusted figure size for a vertical table
+    ax.axis('off')
+    ax.axis('tight')
+
+    # Draw the table
+    table = ax.table(cellText=table_data,
+                     colLabels=col_labels,
+                     loc='center',
+                     cellLoc='left')  # Align text to the left for readability
+
+    # Style the table
+    table.auto_set_font_size(False)
+    table.set_fontsize(10)
+    table.scale(1.2, 1.2)  # Scale width and height slightly
+
+    # Add a title and save the figure
+    plt.title("Top 20 Feature Importances Table", pad=20)
+    plt.savefig(os.path.join(PLOTS_DIR, "feature_importance_table.png"))
+    plt.close()
+
     return best_rf, val_rmse, test_rmse, test_r2
 
 
