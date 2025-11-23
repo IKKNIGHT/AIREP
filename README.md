@@ -117,6 +117,10 @@ These metrics indicate the model predicts binding affinities with reasonable acc
 
 ---
 
+**Top 20 Feature Importances (Table)**
+
+![Feature Importances Table](plots/feature_importance_table.png)
+
 ## Project Structure
 ```
 airep/
