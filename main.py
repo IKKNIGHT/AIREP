@@ -18,7 +18,7 @@ from rdkit.Chem import DataStructs
 
 from sklearn.ensemble import RandomForestRegressor
 from sklearn.model_selection import train_test_split, RandomizedSearchCV
-from sklearn.metrics import mean_squared_error, r2_score
+from sklearn.metrics import mean_squared_error, r2_score, auc, precision_recall_curve
 
 import matplotlib.pyplot as plt
 import joblib
@@ -170,7 +170,11 @@ def train_model(X, y):
     test_r2 = r2_score(y_test, y_test_pred)
 
     # --- PLOTS ---
+    # 1. Precision-Recall Curve (Good for showing screening reliability)
+    plot_precision_recall(y_test, y_test_pred, threshold=7.0)
 
+    # 2. Parity Plot with Error Tunnels (Shows prediction confidence)
+    plot_parity_with_error(y_test, y_test_pred)
     # Predicted vs Actual (Validation)
     plt.figure(figsize=(6,6))
     plt.scatter(y_val, y_val_pred, alpha=0.6, edgecolors='k')
@@ -482,6 +486,44 @@ def train_and_load_model():
     joblib.dump(model, model_file)
     trained_models[TARGET_NAME] = model
 
+
+def plot_precision_recall(y_true, y_pred, threshold=7.0):
+    # Convert pAffinity to Binary (1 = Active, 0 = Inactive)
+    y_true_bin = (y_true >= threshold).astype(int)
+
+    precision, recall, _ = precision_recall_curve(y_true_bin, y_pred)
+    pr_auc = auc(recall, precision)
+
+    plt.figure(figsize=(7, 5))
+    plt.plot(recall, precision, color='darkblue', lw=2, label=f'PR AUC = {pr_auc:.2f}')
+    plt.fill_between(recall, precision, alpha=0.2, color='blue')
+    plt.xlabel('Recall (Fraction of real inhibitors found)')
+    plt.ylabel('Precision (Fraction of predicted inhibitors that are real)')
+    plt.title('Conclusion: Model Screening Performance')
+    plt.legend(loc="lower left")
+    plt.grid(alpha=0.3)
+    plt.savefig(os.path.join(PLOTS_DIR, "conclusion_pr_curve.png"))
+    plt.close()
+
+
+def plot_parity_with_error(y_true, y_pred):
+    plt.figure(figsize=(7, 7))
+    plt.scatter(y_true, y_pred, alpha=0.5, c='teal', edgecolors='k')
+
+    # Draw the ideal 1:1 line
+    lims = [min(min(y_true), min(y_pred)), max(max(y_true), max(y_pred))]
+    plt.plot(lims, lims, 'r-', lw=2, label="Ideal")
+
+    # Draw +/- 1.0 log unit tunnels
+    plt.fill_between(lims, [x - 1.0 for x in lims], [x + 1.0 for x in lims],
+                     color='gray', alpha=0.2, label="+/- 1.0 Log Unit")
+
+    plt.xlabel("Actual pAffinity")
+    plt.ylabel("Predicted pAffinity")
+    plt.title("Prediction Confidence Analysis")
+    plt.legend()
+    plt.savefig(os.path.join(PLOTS_DIR, "conclusion_parity_tunnel.png"))
+    plt.close()
 if __name__ == "__main__":
     try:
         train_and_load_model()
